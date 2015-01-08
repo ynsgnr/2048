@@ -1,0 +1,434 @@
+program twohundredfortyeight_win8;
+uses crt;
+(*---- Yunus Güngör-14011004 -----*)
+(*-- Yıldız Teknik Üniversitesi --*)
+(*-------- 2048inConsole! ---------*)
+var game : Array [1..4,1..4,0..100] of integer;(*game[line,column,0] is the main matris, the remaining is the storage*)
+    order : Array [1..4] of integer;
+    point : Array [0..100] of integer;  (*point[0] is the main point variable, the remaining is the storage*)
+    key : char;
+    column , line, counter (*counts cells with values*), k, storage_num,old_storage_num : integer;
+    won, changed, cantmove, not_continuing , undo_error, hundred_moves_done : boolean;
+    procedure show_main_menu();
+    begin
+         writeln('');
+         writeln('-------------Retro 2048-------------');
+         writeln('');
+         writeln('_______________      _____   ______  ');
+         writeln('\_____  \   _  \    /  |  | /  __  \ ');
+         writeln(' /  ____/  /_\  \  /   |  |_>      < ');
+         writeln('/       \  \_/   \/    ^   /   --   \');
+         writeln('\_______ \_____  /\____   |\______  /');
+         writeln('        \/     \/      |__|       \/ ');
+         writeln('');
+         writeln('-----Baslamak icin bir tusa basin-----');
+         readkey;
+         clrscr;
+         writeln('');
+         writeln('-------------Retro 2048-------------');
+         writeln('');
+         writeln('Oyunun kurallari basit yapman gereken');
+         writeln('tek sey sayilari yon tuslarini');
+         writeln('kullanarak suruklemek ve ayni');
+         writeln('olan sayilari yan yana getirip');
+         writeln('toplamak.');
+         writeln('');
+         writeln('2048e ulasirsan kazanirsin');
+         writeln('');
+         writeln('----Devam etmek icin bir tusa bas----');
+         readkey;
+    end;
+    procedure show_info();
+    begin
+         writeln('');
+         writeln('-------------Retro 2048-------------');
+         writeln('');
+         writeln('Oyunu yon tuslariyla oynayabilirsin');
+         writeln('Oyundan cikmak icin "e" tusuna basabilirsin');
+         writeln('Hata yaparsan "u" tusuyla geri alabilirsin.');
+         writeln('');
+         if undo_error then
+            begin
+            writeln('-!- Hamlenizi suanda geri alamassiniz -!-');
+            undo_error:=false;
+            end;
+    end;
+    procedure create_random_number();
+    begin
+        if changed then
+         begin
+         repeat
+          begin
+           column:=random(4)+1; line:=random(4)+1;
+          end;
+         until game[line,column,0]=0;
+         if random(8)=8 then game[line,column,0]:=5 (*its 5 to detect new created random in the cell_output section*)
+                        else game[line,column,0]:=3; (*its 3 because of exactly same reason*)
+         end;
+    end;
+    procedure restart(); (*changes every variable to starting values*)
+    begin
+         for k:=0 to 100 do
+          begin
+           point[k]:=0;
+           for column:=1 to 4 do
+             for line:=1 to 4 do
+              game[column,line,k]:=0;
+          end;
+         (*change all game's variables with zeros*)
+         won:=false;
+         not_continuing:=true;
+         counter:=0;
+         key:=#0;
+         changed:=false;
+         game [(random(4)+1),(random(4)+1),0]:=2;
+         game [(random(4)+1),(random(4)+1),0]:=2;
+         storage_num:=0;
+         undo_error:=false;
+         old_storage_num:=0;
+         hundred_moves_done:=false;
+    end;
+    procedure cell_output(); (*gives output only if cell is not zero, adds '*' to new created numbers and counts cells with values*)
+    begin
+     if game [line,column,0]=0
+      then write('     '(*left margin*),#179)
+      else
+       begin
+        if game[line,column,0] mod 2 = 1 (*checking that should "*" added or not*)
+         then
+          begin
+            game[line,column,0]:=game[line,column,0]-1; (*since program knows that * should added to output, we can use normal value for cell*)
+            (*(looking up to create_random_number 5-1=4 and 3-1=2)*)
+            write(' *',game[line,column,0]:3,#179);
+          end
+        else
+         begin
+          write(game[line,column,0]:5,#179);
+          if game[line,column,0]=2048 then won:=true; (*checking that user won the game or not*)
+         end;
+         counter:=counter+1; (*counts cells with numbers. When reached 16 checks that did game end or not*)
+       end;
+    end;
+    procedure add_numbers(); (*calculates sum of numbers and calculates point*)
+    begin
+     game[line,column,0]:= game[line,column,0]*2;
+     point[0]:=point[0]+game[line,column,0];
+     changed:=true;
+    end;
+    procedure undo(); (*does the undo process*)
+    begin
+     if (((storage_num<=100) and (storage_num>=1)) and (storage_num<>(old_storage_num+1))) then
+      begin
+       storage_num:=storage_num-1;
+       if ((storage_num<1) and (hundred_moves_done)) then storage_num:=100;
+       for line:=1 to 4 do
+        for column:=1 to 4 do
+         begin
+         game[line,column,0]:=game[line,column,storage_num];
+         end;
+       point[0]:=point[storage_num];
+      end
+     else undo_error:=true;
+    end;
+    procedure add_to_storage(); (*adds to storage which used for undo*)
+    begin
+     if changed then
+      begin
+       storage_num:=storage_num+1;
+       if storage_num>100 then
+        begin
+         storage_num:=1;
+         hundred_moves_done:=true;
+        end;
+       old_storage_num:=storage_num;
+       for line:=1 to 4 do
+        for column:=1 to 4 do
+         game[line,column,storage_num]:=game[line,column,0];
+       point[storage_num]:=point[0];
+      end;
+    end;
+    function game_over ():boolean; (*detects game is over or not by looking for same numbers which side by side*)
+    begin
+     line:=1;
+     cantmove:=true;
+     while ((line<=4) and (cantmove)) do
+      begin
+       column:=1;
+       while ((column<=3) and (cantmove)) do
+        begin
+         if ((game[line,column,0]=game[line,(column+1),0]) or (game[column,line,0]=game[(column+1),line,0]))
+          then cantmove:=false;
+          column:=column+1;
+        end;
+       line:=line+1;
+      end;
+     game_over:=cantmove;
+    end;
+
+begin
+  randomize();
+  restart();(*assign starting values*)
+  show_main_menu();
+  repeat
+   begin
+   clrscr();
+   counter:=0;
+   changed:=false;
+   (*-----output-------*)
+   clrscr;
+   show_info();
+   (*-header-*)
+   writeln('     ' (*left margin*),
+           #218, (*first column*)#196, #196, #196, #196, #196,(*/first column\*)
+           #194,(*second column*)#196, #196, #196, #196, #196,(*/second column\*)
+           #194,(*third column*)#196, #196, #196, #196, #196,(*/third column\*)
+           #194,(*fourth column*)#196, #196, #196, #196, #196,(*/fourth column\*)
+           #191);
+   (*/header\*)
+   for line:=1 to 3 do
+   begin
+      write ('     '(*left margin*),#179);
+      for column:=1 to 4 do cell_output();
+      (*-beetwen lines-*)
+      writeln();
+      writeln('     '(*left margin*),
+              #195, (*first column*)#196, #196, #196, #196, #196,(*/first column\*)
+              #197,(*second column*)#196, #196, #196, #196, #196,(*/second column\*)
+              #197,(*third column*)#196, #196, #196, #196, #196,(*/third column\*)
+              #197,(*fourth column*)#196, #196, #196, #196, #196,(*/fourth column\*)
+              #180);
+   end;
+   write ('     '#179);
+   (*/beetwen lines\*)
+   line:=4;
+   for column:=1 to 4 do cell_output();
+   end;
+   (*footer*)
+   writeln();
+   writeln('     '(*left margin*),
+            #192, (*first column*)#196, #196, #196, #196, #196,(*/first column\*)
+            #193,(*second column*)#196, #196, #196, #196, #196,(*/second column\*)
+            #193,(*third column*)#196, #196, #196, #196, #196,(*/third column\*)
+            #193,(*fourth column*)#196, #196, #196, #196, #196,(*/fourth column\*)
+            #217);
+   (*/footer\*)
+   writeln('');
+   writeln('----------- Puan:',point[0]:6,' ------------');
+  (*--///output\\\----*)
+   (*--game is over or not--*)
+   if (counter>=16) then
+     begin
+      if game_over() then
+       begin
+        writeln('Oyun bitti, yeni bir oyun baslatmak istersen');
+        writeln('* tusuna basabilirsin');
+        repeat
+         key:=readkey;
+        until ((key=#27) or (key='*')) or ((key='e') or (key='E'));
+        if key='*' then restart();
+       end;
+     end;
+   if ((won) and (not_continuing)) then
+    begin
+     writeln('Oyunu kazandin!, yeni bir oyun baslatmak istersen');
+     writeln('* tusuna basabilirsin');
+     writeln('Devam etmek istersen bosluk tusuna basabilirsin');
+      repeat
+       key:=readkey;
+      until (((key=#27) or (key=' ')) or ((key='*') or (key='e')) or (key='E'));
+     if key=' ' then not_continuing:=false
+                else if key='*' then restart();
+    end;
+   counter:=0;
+   (*//game is over or not\\*)
+   key:=readkey;(*input*)
+   (*-----process-----*)
+   case key of
+   #77 : (*right button pressed*)
+     begin
+       for line:=1 to 4 do
+        begin
+         (*align line to right*)
+         k:=4;
+          for column:=4 downto 1 do
+           begin
+           if game[line,column,0]<>0 then
+            begin
+             order[k]:=game[line,column,0];
+             if k<>column then changed:=true;
+             (* if k is not equal to the column that means unaligned line (old line) is not same with the aligned line *)
+             k:=k-1;
+            end;
+           end;
+          for column:=4 downto 1 do
+           begin
+           game[line,column,0]:=order[column];
+           order[column]:=0;
+           end;
+          (*/align line to right\*)
+          (*addition of same numbers*)
+         for column:=4 downto 2 do
+          begin
+           if (game[line,(column-1),0]=game[line,column,0]) and (game[line,column,0]<>0) then
+            begin
+             add_numbers();
+             case column of (*align numbers after addition*)
+              4:
+               begin
+                game[line,3,0]:=game[line,2,0];
+                game[line,2,0]:=game[line,1,0];
+               end;
+              3:
+               begin
+                game[line,2,0]:=game[line,1,0];
+               end;
+             end;
+             game[line,1,0]:=0;
+            end;
+          end;
+        (*/addition of same numbers\*)
+        end;
+     end;
+   #75 : (*left button pressed*)
+     begin
+      for line:=1 to 4 do
+       begin
+        (*align line to left*)
+        k:=1;
+        for column:=1 to 4 do
+         begin
+          if game[line,column,0]<>0 then
+           begin
+            order[k]:=game[line,column,0];
+            if k<>column then changed:=true;
+            (* if k is not equal to the column that means unaligned line (old line) is not same with the aligned line *)
+            k:=k+1;
+           end;
+         end;
+        for column:=4 downto 1 do
+         begin
+          game[line,column,0]:=order[column];
+          order[column]:=0;
+         end;
+        (*/align line to left*)
+        (*addition of same numbers*)
+        for column:=1 to 3 do
+         begin
+          if (game[line,(column+1),0]=game[line,column,0]) and (game[line,column,0]<>0) then
+           begin
+            add_numbers();
+            case column of (*align numbers after addition*)
+            1:
+              begin
+               game[line,2,0]:=game[line,3,0];
+               game[line,3,0]:=game[line,4,0];
+              end;
+            2:
+              begin
+               game[line,3,0]:=game[line,4,0];
+              end;
+            end;
+            game[line,4,0]:=0;
+           end;
+         end;
+        (*/addition of same numbers\*)
+       end;
+     end;
+   #72: (*up button pressed*)
+     begin
+      for column:=1 to 4 do
+       begin
+       (*align line to up*)
+        k:=1;
+        for line:=1 to 4 do
+         begin
+          if game[line,column,0]<>0 then
+           begin
+            order[k]:=game[line,column,0];
+            if k<>line then changed:=true;
+            (* if k is not equal to the line that means unaligned column (old column) is not same with the aligned column *)
+            k:=k+1;
+           end;
+         end;
+        for line:=4 downto 1 do
+         begin
+          game[line,column,0]:=order[line];
+          order[line]:=0;
+         end;
+         (*/align line to up\*)
+         (*addition of same numbers*)
+        for line:=1 to 3 do
+         begin
+          if (game[(line+1),column,0]=game[line,column,0]) and (game[line,column,0]<>0) then
+           begin
+            add_numbers();
+            case line of (*align numbers after addition*)
+            1:
+             begin
+              game[2,column,0]:=game[3,column,0];
+              game[3,column,0]:=game[4,column,0];
+             end;
+            2:
+             begin
+              game[3,column,0]:=game[4,column,0];
+             end;
+            end;
+            game[4,column,0]:=0;
+          end;
+         end;
+        (*/addition of same numbers\*)
+       end;
+     end;
+   #80: (*down button pressed*)
+     begin
+      for column:=1 to 4 do
+       begin
+       (*align line to down*)
+        k:=4;
+        for line:=4 downto 1 do
+         begin
+          if game[line,column,0]<>0 then
+           begin
+            order[k]:=game[line,column,0];
+            if k<>line then changed:=true;
+            (* if k is not equal to the line that means unaligned column (old column) is not same with the aligned column *)
+            k:=k-1;
+           end;
+         end;
+        for line:=4 downto 1 do
+         begin
+          game[line,column,0]:=order[line];
+          order[line]:=0;
+         end;
+       (*/align line to down\*)
+       (*addition of same numbers*)
+        for line:=4 downto 2 do
+         begin
+          if (game[(line-1),column,0]=game[line,column,0]) and (game[line,column,0]<>0) then
+           begin
+            add_numbers();
+            case line of (*align numbers after addition*)
+             4:
+               begin
+                game[3,column,0]:=game[2,column,0];
+                game[2,column,0]:=game[1,column,0];
+               end;
+             3:
+               begin
+                game[2,column,0]:=game[1,column,0];
+               end;
+            end;
+            game[1,column,0]:=0;
+           end;
+         end;
+       end;
+     end;
+   'u':undo();
+   'U':undo();
+   end;
+   create_random_number();
+   add_to_storage();
+   changed:=false;
+  (*--///process\\\--*)
+  until (((key='e') or (key='E')) or (key=#27));
+end.
